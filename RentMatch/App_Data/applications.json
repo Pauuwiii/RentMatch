@@ -1,0 +1,20 @@
+[
+  {
+    "propertyId": "panopio-compound-bedspace",
+    "name": "Gabriela Ramos",
+    "renterEmail": "gabriela.ramos@example.com",
+    "date": "Nov 09, 2026",
+    "id": "1c95e10ee5104be89904c9a44718cfd8",
+    "property": "Panopio Compound Bedspace",
+    "status": "Approved"
+  },
+  {
+    "propertyId": "encasa-residences",
+    "name": "Gabriela Ramos",
+    "renterEmail": "gabriela.ramos@example.com",
+    "date": "Nov 08, 2026",
+    "id": "995e44c68d324c8da998f43b7df41dfe",
+    "property": "En Casa Residences",
+    "status": "Pending"
+  }
+]

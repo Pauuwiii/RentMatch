@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Maya Santos",
+    "role": "Property host",
+    "status": "Verified",
+    "email": "maya.santos@example.com"
+  },
+  {
+    "name": "Rafael Cruz",
+    "role": "Property host",
+    "status": "In review",
+    "email": "rafael.c@example.com"
+  },
+  {
+    "name": "Gabriela Ramos",
+    "role": "Renter",
+    "status": "Active",
+    "email": "gabriela.r@example.com"
+  },
+  {
+    "name": "Maya Santos",
+    "role": "Property host",
+    "status": "Verified",
+    "email": "landlord@rentmatch.local"
+  }
+]
