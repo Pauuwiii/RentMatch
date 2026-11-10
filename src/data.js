@@ -96,6 +96,7 @@ export const initialProperties = propertyCatalog
   )
   .map((property) => ({
     ...property,
+    moderationStatus: "Approved",
     image: publicAssetUrl(property.image),
     ...(property.images ? { images: property.images.map(publicAssetUrl) } : {}),
   }));
