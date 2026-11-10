@@ -4,12 +4,12 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   plugins: [react()],
+  base: process.env.GITHUB_ACTIONS === "true" ? "/RentMatch/" : "/",
   build: {
     outDir: resolve(process.cwd(), "wwwroot"),
     emptyOutDir: false,
     cssCodeSplit: false,
     rollupOptions: {
-      input: resolve(process.cwd(), "src/main.jsx"),
       output: {
         entryFileNames: "js/rentmatch.js",
         chunkFileNames: "js/[name].js",

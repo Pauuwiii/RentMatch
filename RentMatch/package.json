@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "build:pages": "vite build --outDir dist --emptyOutDir"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",

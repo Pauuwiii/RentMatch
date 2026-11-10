@@ -85,10 +85,20 @@ const propertyCatalog = [
   }
 ];
 
-export const initialProperties = propertyCatalog.filter(({ id, sourceDocumentListing }) =>
-  sourceDocumentListing
-  || ["jose-residencia-dormitory", "queens-dorm", "encasa-residences"].includes(id),
-);
+const publicAssetUrl = (path) => path.startsWith("/")
+  ? `${import.meta.env.BASE_URL}${path.slice(1)}`
+  : path;
+
+export const initialProperties = propertyCatalog
+  .filter(({ id, sourceDocumentListing }) =>
+    sourceDocumentListing
+    || ["jose-residencia-dormitory", "queens-dorm", "encasa-residences"].includes(id),
+  )
+  .map((property) => ({
+    ...property,
+    image: publicAssetUrl(property.image),
+    ...(property.images ? { images: property.images.map(publicAssetUrl) } : {}),
+  }));
 
 export const locations = ["All locations", "Poblacion", "Kumintang", "Alangilan", "Balagtas", "Other areas"];
 export const propertyTypes = ["All types", "Apartment", "Bedspace", "Boarding House", "Dormitory", "Studio Unit", "House"];

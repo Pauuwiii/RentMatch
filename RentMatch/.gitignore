@@ -2,6 +2,7 @@
 bin/
 obj/
 node_modules/
+dist/
 
 ## Visual Studio / VS Code
 .vs/

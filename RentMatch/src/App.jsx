@@ -12,10 +12,14 @@ import { amenityOptions, defaultPreferences, initialProperties, locations, prope
 
 const currency = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const fallbackImage = "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=85";
+const staticPreview = import.meta.env.VITE_STATIC_PREVIEW === "true";
 const adminDemoAccount = { email: "admin@rentmatch.local", password: "RentMatch123", name: "RentMatch Admin" };
 const landlordDemoAccount = { email: "landlord@rentmatch.local", password: "RentMatch123", name: "Maya Santos" };
 
 async function apiRequest(url, options) {
+  if (staticPreview) {
+    throw new Error("Server-backed actions are unavailable in this GitHub Pages preview.");
+  }
   const response = await fetch(url, options);
   if (!response.ok) {
     let message = `Request failed (${response.status}).`;
@@ -113,7 +117,7 @@ function getMatchScore(property, preferences) {
 }
 
 function Brand({ onClick, inverse = false }) {
-  return <button className={`brand ${inverse ? "brand-inverse" : ""}`} type="button" onClick={onClick} aria-label="RentMatch home"><img className="brand-logo" src="/Images/rentmatch-logo.png" alt="RentMatch" /></button>;
+  return <button className={`brand ${inverse ? "brand-inverse" : ""}`} type="button" onClick={onClick} aria-label="RentMatch home"><img className="brand-logo" src={`${import.meta.env.BASE_URL}Images/rentmatch-logo.png`} alt="RentMatch" /></button>;
 }
 
 function Button({ children, variant = "primary", size = "normal", className = "", ...props }) {
@@ -227,6 +231,7 @@ function Landing({ properties, onRole, onLogin, onRegister, onBrowse }) {
     ["Can I compare rentals side by side?", "Yes. Add up to three homes to Compare to review rent, location, amenities, availability, ratings, and your match score together."]
   ];
   return <div className="public-page">
+    {staticPreview && <div className="static-preview-notice" role="status">Static preview: browsing and demo sign-in are available; server-backed actions require the full RentMatch app.</div>}
     <header className="public-header"><Brand onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} /><nav className="public-links" aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#featured">Featured homes</a><a href="#faqs">FAQs</a></nav><div className="public-actions"><button className="text-button desktop-auth" onClick={onLogin}>Log in</button><Button variant="outline" size="small" onClick={onRegister}>Create account <ArrowRight size={15} /></Button><button className="text-button mobile-login" onClick={onLogin}>Log in</button></div></header>
     <main>
       <section className="landing-hero">
@@ -239,7 +244,7 @@ function Landing({ properties, onRole, onLogin, onRegister, onBrowse }) {
         <article className="role-card renter-role"><div className="role-icon"><Home size={22} /></div><div className="role-card-copy"><span className="role-caption">FOR RENTERS</span><h3>Find a home that fits.</h3><p>Browse rentals, compare your options, and get matched to a place that feels right.</p><Button onClick={() => onRole("renter")}>Continue as renter <ArrowRight size={16} /></Button></div><div className="role-card-art renter-art"><img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=700&q=85" alt="A sunlit apartment living room" loading="lazy" /></div></article>
         <article className="role-card landlord-role"><div className="role-icon"><Building2 size={22} /></div><div className="role-card-copy"><span className="role-caption">FOR PROPERTY HOSTS</span><h3>Meet your next tenant.</h3><p>Showcase your property, respond to inquiries, and stay on top of applications.</p><Button variant="navy" onClick={() => onRole("landlord")}>Continue as landlord <ArrowRight size={16} /></Button></div><div className="role-card-art landlord-art"><img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=700&q=85" alt="Modern rental home interior" loading="lazy" /></div></article>
       </div></section>
-      <section className="featured-section" id="featured"><div className="featured-heading"><div><p className="eyebrow">LOCAL HOMES, REAL POSSIBILITIES</p><h2>A few places to get you started.</h2><p>Thoughtful rental options around Batangas City.</p></div><button className="text-link" onClick={() => onBrowse("renter")}>Explore all homes <ArrowRight size={16} /></button></div><div className="featured-grid">{properties.filter((property) => !property.isDraft && property.available !== false && (!Number.isInteger(property.units) || property.units > 0)).slice(0, 3).map((property) => <button className="featured-card" key={property.id} onClick={() => onBrowse("renter")}><img src={property.image} alt={property.name} loading="lazy" /><span className="featured-card-meta"><strong>{property.name}</strong><span>{property.location} · {displayPrice(property)} / {priceUnitLabel(property)}</span></span></button>)}</div></section>
+      <section className="featured-section" id="featured"><div className="featured-heading"><div><p className="eyebrow">LOCAL HOMES, REAL POSSIBILITIES</p><h2>A few places to get you started.</h2><p>Thoughtful rental options around Batangas City.</p></div><button className="text-link" onClick={() => onBrowse("renter")}>Explore all homes <ArrowRight size={16} /></button></div><div className="featured-grid">{properties.filter((property) => !property.isDraft && property.available !== false && (!Number.isInteger(property.units) || property.units > 0)).slice(0, 3).map((property) => <button className="featured-card" key={property.id} onClick={() => onBrowse("renter")}><img src={property.image || fallbackImage} alt={property.name} loading="lazy" /><span className="featured-card-meta"><strong>{property.name}</strong><span>{property.location} · {displayPrice(property)} / {priceUnitLabel(property)}</span></span></button>)}</div></section>
       <section className="match-explainer"><div className="explainer-icon"><Sparkles size={22} /></div><div><p className="eyebrow">A MORE PERSONAL SEARCH</p><h2>Less scrolling. Better matches.</h2><p>Set your budget, choose your neighborhoods, and tell us what matters. RentMatch brings the best-fit homes forward so your search starts with the right details.</p></div><Button variant="outline" onClick={() => onRole("renter")}>Build my preferences <ArrowRight size={16} /></Button></section>
       <section className="faq-section" id="faqs"><div><p className="eyebrow">GOOD TO KNOW</p><h2>Questions, meet answers.</h2><p>We’re here to make the next move clearer.</p><a href="mailto:hello@rentmatch.local"><Mail size={15} /> Contact the RentMatch team</a></div><div className="faq-list">{faqs.map(([question, answer]) => <details key={question}><summary>{question}<Plus size={18} /></summary><p>{answer}</p></details>)}</div></section>
     </main>
@@ -1837,6 +1842,10 @@ function AdminPage({ properties, setProperties, onToast }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const reloadProperties = async () => {
+    if (staticPreview) {
+      onToast("Admin refresh requires the full RentMatch app.");
+      return;
+    }
     setRefreshing(true);
     try {
       const serverProperties = await apiRequest("/api/properties");
@@ -1856,6 +1865,7 @@ function AdminPage({ properties, setProperties, onToast }) {
   };
 
   useEffect(() => {
+    if (staticPreview) return;
     let cancelled = false;
     const loadAdminData = async () => {
       try {
@@ -1882,6 +1892,10 @@ function AdminPage({ properties, setProperties, onToast }) {
     return () => { cancelled = true; };
   }, []);
   const verify = async (account) => {
+    if (staticPreview) {
+      onToast("Verification updates require the full RentMatch app.");
+      return;
+    }
     try {
       const updatedAccount = await apiRequest(`/api/accounts/${encodeURIComponent(account.email)}`, {
         method: "PUT",
@@ -1895,6 +1909,10 @@ function AdminPage({ properties, setProperties, onToast }) {
     }
   };
   const setModerationStatus = async (property, status) => {
+    if (staticPreview) {
+      onToast("Listing review updates require the full RentMatch app.");
+      return false;
+    }
     try {
       const updated = await apiRequest(`/api/properties/${encodeURIComponent(property.id)}`, {
         method: "PUT",
@@ -1910,6 +1928,10 @@ function AdminPage({ properties, setProperties, onToast }) {
     }
   };
   const removeListing = async (property) => {
+    if (staticPreview) {
+      onToast("Removing listings requires the full RentMatch app.");
+      return false;
+    }
     try {
       await apiRequest(`/api/properties/${encodeURIComponent(property.id)}`, { method: "DELETE" });
       setProperties((current) => current.filter((item) => item.id !== property.id));
@@ -2212,6 +2234,10 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
     }
   };
   const confirmViewing = async (property, date, requestedTime, renterMessage) => {
+    if (staticPreview) {
+      notify("Viewing requests require the full RentMatch app.");
+      return;
+    }
     try {
       const request = await apiRequest("/api/viewings", {
         method: "POST",
@@ -2239,6 +2265,13 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       notify(`Could not schedule the viewing: ${error.message}`);
     }
   };
+  const openViewingCalendar = (property) => {
+    if (staticPreview) {
+      notify("Viewing requests require the full RentMatch app.");
+      return;
+    }
+    setScheduleProperty(property);
+  };
   const startMessage = (property) => { setSelectedProperty(null); setView("messages"); if (!messages.some((item) => item.person === property.host)) setMessages([...messages, { id: Date.now(), person: property.host || "Property host", from: property.host || "Property host", text: `Hello, thanks for your interest in ${property.name}. What would you like to know?`, time: "Just now" }]); };
   const signOut = () => { setUser(null); setView("landing"); };
   const goToAdmin = () => { if (user.role === "admin") setView("admin"); };
@@ -2253,9 +2286,9 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
   const applicants = applications
     .filter((application) => user.role !== "landlord" || ownPropertyIds.has(application.propertyId))
     .map((application) => ({
-    ...application,
-    property: application.property || properties.find((property) => property.id === application.propertyId)?.name || "Rental listing",
-  }));
+      ...application,
+      property: application.property || properties.find((property) => property.id === application.propertyId)?.name || "Rental listing",
+    }));
   const hostMaintenancePropertyIds = new Set(properties
     .filter((property) => property.ownerEmail === user.email || property.host === user.name)
     .map((property) => property.id));
@@ -2456,12 +2489,21 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
     else if (view === "applications") content = <ApplicationsPage applications={visibleApplications} viewings={renterViewings} properties={properties} onBrowse={() => setView("search")} />;
     else content = <HomeDashboard user={user} properties={renterProperties} preferences={preferences} favorites={favorites} applications={visibleApplications} viewings={viewings} onNavigate={setView} onOpen={setSelectedProperty} onSave={save} onCompare={compare} compareIds={compareIds} getScore={getScore} />;
   }
-  return <div className={`workspace ${user.role === "admin" ? "admin-workspace" : user.role === "landlord" ? "landlord-workspace" : "renter-workspace"}`}><AppHeader user={{ ...user, compareCount: compareIds.length }} view={view} setView={setView} onLogout={signOut} onPreferences={goToPreferences} onAdmin={goToAdmin} onRoleChange={onRoleChange} notifications={viewingNotifications} /><main className="workspace-main">{content}<footer className="workspace-footer"><span>© 2026 RentMatch · Batangas City</span><span>Sample listings and account data for product preview</span></footer></main>
-    {selectedProperty && currentPropertyForDetail && <PropertyDetails property={currentPropertyForDetail} score={getScore(currentPropertyForDetail)} saved={favorites.includes(currentPropertyForDetail.id)} compared={compareIds.includes(currentPropertyForDetail.id)} viewingRequested={viewings.some((item) => item.propertyId === currentPropertyForDetail.id && item.renterEmail === user.email && item.status !== "Unavailable")} onClose={() => setSelectedProperty(null)} onSave={() => save(currentPropertyForDetail.id)} onCompare={() => compare(currentPropertyForDetail.id)} onApply={() => apply(currentPropertyForDetail)} onSchedule={() => setScheduleProperty(currentPropertyForDetail)} onMessage={() => startMessage(currentPropertyForDetail)} />}
-    {scheduleProperty && <ViewingCalendar property={scheduleProperty} viewings={viewings} onClose={() => setScheduleProperty(null)} onConfirm={(date, time, message) => confirmViewing(scheduleProperty, date, time, message)} />}
-    {editorProperty !== undefined && <PropertyEditor property={editorProperty} onClose={() => setEditorProperty(undefined)} onSave={saveProperty} onToast={notify} />}
-    {toast && <div className="toast" role="status" aria-live="polite"><CheckCircle2 size={17} />{toast}</div>}
-  </div>;
+  return (
+    <>
+      {staticPreview && (
+        <div className="static-preview-notice" role="status">
+          Static preview: browsing and demo sign-in are available; server-backed actions require the full RentMatch app.
+        </div>
+      )}
+      <div className={`workspace ${user.role === "admin" ? "admin-workspace" : user.role === "landlord" ? "landlord-workspace" : "renter-workspace"}`}><AppHeader user={{ ...user, compareCount: compareIds.length }} view={view} setView={setView} onLogout={signOut} onPreferences={goToPreferences} onAdmin={goToAdmin} onRoleChange={onRoleChange} notifications={viewingNotifications} /><main className="workspace-main">{content}<footer className="workspace-footer"><span>© 2026 RentMatch · Batangas City</span><span>Sample listings and account data for product preview</span></footer></main>
+      {selectedProperty && currentPropertyForDetail && <PropertyDetails property={currentPropertyForDetail} score={getScore(currentPropertyForDetail)} saved={favorites.includes(currentPropertyForDetail.id)} compared={compareIds.includes(currentPropertyForDetail.id)} viewingRequested={viewings.some((item) => item.propertyId === currentPropertyForDetail.id && item.renterEmail === user.email && item.status !== "Unavailable")} onClose={() => setSelectedProperty(null)} onSave={() => save(currentPropertyForDetail.id)} onCompare={() => compare(currentPropertyForDetail.id)} onApply={() => apply(currentPropertyForDetail)} onSchedule={() => openViewingCalendar(currentPropertyForDetail)} onMessage={() => startMessage(currentPropertyForDetail)} />}
+      {scheduleProperty && <ViewingCalendar property={scheduleProperty} viewings={viewings} onClose={() => setScheduleProperty(null)} onConfirm={(date, time, message) => confirmViewing(scheduleProperty, date, time, message)} />}
+      {editorProperty !== undefined && <PropertyEditor property={editorProperty} onClose={() => setEditorProperty(undefined)} onSave={saveProperty} onToast={notify} />}
+      {toast && <div className="toast" role="status" aria-live="polite"><CheckCircle2 size={17} />{toast}</div>}
+      </div>
+    </>
+  );
 }
 
 export default function App() {
@@ -2479,6 +2521,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [authError, setAuthError] = useState("");
   useEffect(() => {
+    if (staticPreview) return;
     let cancelled = false;
     let loading = false;
     let refreshTimer;
@@ -2517,6 +2560,7 @@ export default function App() {
     };
   }, []);
   useEffect(() => {
+    if (staticPreview) return;
     let cancelled = false;
     apiRequest("/api/applications")
       .then((serverApplications) => {
@@ -2528,6 +2572,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
+    if (staticPreview) return;
     let cancelled = false;
     apiRequest("/api/maintenance-requests")
       .then((serverRequests) => {
@@ -2539,6 +2584,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
+      if (staticPreview) return;
       let cancelled = false;
       let loading = false;
       let refreshTimer;
