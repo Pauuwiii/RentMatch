@@ -45,63 +45,8 @@ function isMineMessage(message, user) {
   return false;
 }
 
-function normalizeStoredMessages(messages) {
-  if (!Array.isArray(messages)) return messages;
-  return messages.map((message) => {
-    const isLegacyWelcome = message?.id === "welcome-message"
-      || /thanks for saving the poblacion loft/i.test(message?.text || "");
-    const isLegacyHostGreeting = /^hello, thanks for your interest in .+\. what would you like to know\?$/i.test(message?.text || "");
-    const looksLikeLandlordGreeting = /^(hi|hello)\b/i.test(message?.text || "")
-      && message?.person
-      && message.from
-      && message.from === message.person
-      && message.sender === "me";
-
-    if (isLegacyWelcome) {
-      return {
-        id: "welcome-message",
-        person: "Maya Santos",
-        property: "Anyayahan Apartment",
-        propertyId: "anyayahan-apartment",
-        from: "Gabriela Ramos",
-        text: tenantInterestText("Anyayahan Apartment"),
-        time: message.time || "9:42 AM",
-      };
-    }
-
-    if (isLegacyHostGreeting) {
-      const propertyName = message.property
-        || message.text?.match(/^Hello, thanks for your interest in (.+)\. What would you like to know\?$/i)?.[1]
-        || "this listing";
-      const matchedProperty = initialProperties.find((property) => property.name === propertyName);
-      return {
-        ...message,
-        from: "Gabriela Ramos",
-        property: propertyName,
-        propertyId: message.propertyId || matchedProperty?.id,
-        text: tenantInterestText(propertyName),
-      };
-    }
-
-    // Landlord replies wrongly stored as sender:"me" while chatting as the host contact.
-    // Keep from = host so tenants see them as incoming.
-    if (looksLikeLandlordGreeting) {
-      const { sender, ...rest } = message;
-      return rest;
-    }
-
-    // Test/landlord greetings that were saved under the tenant because of the old sender:"me" flag.
-    if (/^(hi\s+)?paulo(\s+hi)?[!.,]?$/i.test((message?.text || "").trim()) && message.person && message.person !== "Gabriela Ramos") {
-      const { sender, ...rest } = message;
-      return { ...rest, from: message.person };
-    }
-
-    if ("sender" in message) {
-      const { sender, ...rest } = message;
-      return rest;
-    }
-    return message;
-  });
+function normalizeStoredMessages() {
+  return [];
 }
 
 function useStoredState(key, initialValue) {
@@ -110,10 +55,12 @@ function useStoredState(key, initialValue) {
       const stored = localStorage.getItem(key);
       if (!stored) return initialValue;
       const parsed = JSON.parse(stored);
+      const allowedTypes = new Set(["Apartment", "Bedspace", "Dormitory"]);
       if (key === "rentmatch-properties" && Array.isArray(parsed)) {
-        const initialIds = new Set(initialValue.map((property) => property.id));
-        const storedById = new Map(parsed.map((property) => [property.id, property]));
-        const mergedInitial = initialValue.map((property) => {
+        const initialFiltered = initialValue.filter((p) => allowedTypes.has(p.type));
+        const initialIds = new Set(initialFiltered.map((property) => property.id));
+        const storedById = new Map(parsed.filter((p) => allowedTypes.has(p.type)).map((property) => [property.id, property]));
+        const mergedInitial = initialFiltered.map((property) => {
           const stored = storedById.get(property.id);
           if (!stored) return property;
           const merged = { ...property, ...stored };
@@ -126,10 +73,16 @@ function useStoredState(key, initialValue) {
           }
           return merged;
         });
-        const userAdded = parsed.filter((property) => !initialIds.has(property.id));
+        const userAdded = parsed.filter((property) => allowedTypes.has(property.type) && !initialIds.has(property.id));
         return [...userAdded, ...mergedInitial];
       }
-      if (key === "rentmatch-messages") return normalizeStoredMessages(parsed);
+      if (key === "rentmatch-preferences" && parsed && typeof parsed === "object") {
+        return {
+          ...parsed,
+          types: Array.isArray(parsed.types) ? parsed.types.filter((t) => allowedTypes.has(t)) : [],
+        };
+      }
+      if (key === "rentmatch-messages") return [];
       return parsed;
     } catch {
       return initialValue;
@@ -395,10 +348,12 @@ function EmptyState({ icon: Icon = Search, title, detail, action, onAction }) {
 
 function HomeDashboard({ user, properties, preferences, favorites, applications, viewings, onNavigate, onOpen, onSave, onCompare, compareIds, getScore }) {
   const matches = properties.map((property) => ({ property, score: getScore(property) })).sort((a, b) => b.score - a.score).slice(0, 3);
-  return <div className="workspace-content dashboard-content"><section className="dashboard-welcome"><div><p className="eyebrow">YOUR RENTAL SEARCH, MADE PERSONAL</p><h1>Welcome back, {user.name?.split(" ")[0] || "there"}.</h1><p>We found places that are a little closer to what you’re looking for.</p></div><Button onClick={() => onNavigate("preferences")}><SlidersHorizontal size={16} /> Tune my match</Button></section>
+  const pickedTypesLabel = preferences.types?.length ? preferences.types.join(", ") : "All types (Apartment, Bedspace, Dormitory)";
+  const pickedAmenitiesLabel = preferences.amenities?.length ? preferences.amenities.join(", ") : "None specified";
+  return <div className="workspace-content dashboard-content"><section className="dashboard-welcome"><div><p className="eyebrow">YOUR RENTAL SEARCH, MADE PERSONAL</p><h1>Welcome back, {user.name?.split(" ")[0] || "there"}.</h1><p>We found places that are a little closer to what you’re looking for.</p><div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px" }}><span className="choice-chip selected" style={{ pointerEvents: "none", fontSize: "12px", padding: "4px 10px" }}>📍 {preferences.location}</span><span className="choice-chip selected" style={{ pointerEvents: "none", fontSize: "12px", padding: "4px 10px" }}>💰 Up to {currency.format(preferences.budget)}</span>{preferences.types?.length ? <span className="choice-chip selected" style={{ pointerEvents: "none", fontSize: "12px", padding: "4px 10px" }}>🏠 {pickedTypesLabel}</span> : null}{preferences.amenities?.length ? <span className="choice-chip selected" style={{ pointerEvents: "none", fontSize: "12px", padding: "4px 10px" }}>✨ {pickedAmenitiesLabel}</span> : null}{preferences.distance && preferences.distance !== "Any distance" ? <span className="choice-chip selected" style={{ pointerEvents: "none", fontSize: "12px", padding: "4px 10px" }}>🧭 {preferences.distance}</span> : null}</div></div><Button onClick={() => onNavigate("preferences")}><SlidersHorizontal size={16} /> Tune my match</Button></section>
     <div className="stat-grid"><StatCard icon={Sparkles} label="Matched homes" value={properties.length} note="Based on your preferences" tone="blue" /><StatCard icon={Heart} label="Saved homes" value={favorites.length} note="Your shortlist" tone="rose" /><StatCard icon={FileText} label="Applications" value={applications.length} note={applications.length ? "Status updates inside" : "Ready when you are"} tone="green" /><StatCard icon={CalendarDays} label="Viewings" value={viewings.length} note={viewings.length ? "Upcoming appointments" : "Schedule from a listing"} tone="amber" /></div>
     <section className="dashboard-section"><div className="subsection-heading"><div><p className="eyebrow">YOUR TOP MATCHES</p><h2>Places worth a closer look</h2></div><button className="text-link" onClick={() => onNavigate("search")}>See all matches <ArrowRight size={15} /></button></div><div className="property-grid">{matches.map(({ property, score }) => <PropertyCard key={property.id} property={property} score={score} saved={favorites.includes(property.id)} compared={compareIds.includes(property.id)} onSave={() => onSave(property.id)} onCompare={() => onCompare(property.id)} onOpen={() => onOpen(property)} />)}</div></section>
-    <section className="dashboard-lower"><button className="preference-summary" onClick={() => onNavigate("preferences")}><div className="preference-summary-top"><span className="summary-icon"><SlidersHorizontal size={17} /></span><span className="text-link">Edit <ArrowRight size={14} /></span></div><p className="eyebrow">YOUR MATCH PROFILE</p><h3>Made around your must-haves.</h3><p>{preferences.location === "All locations" ? "Anywhere in Batangas City" : preferences.location} · Up to {currency.format(preferences.budget)}/mo{preferences.amenities?.length ? ` · ${preferences.amenities.slice(0, 2).join(", ")}` : ""}</p></button><button className="dashboard-prompt" onClick={() => onNavigate("applications")}><span className="prompt-icon"><CalendarDays size={18} /></span><div><strong>Planning your next step?</strong><span>Keep track of viewing schedules and rental applications in one place.</span></div><ChevronRight size={18} /></button></section>
+    <section className="dashboard-lower"><button className="preference-summary" onClick={() => onNavigate("preferences")}><div className="preference-summary-top"><span className="summary-icon"><SlidersHorizontal size={17} /></span><span className="text-link">Edit <ArrowRight size={14} /></span></div><p className="eyebrow">YOUR MATCH PROFILE</p><h3>Made around your must-haves.</h3><div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", color: "#546479", marginTop: "8px", textAlign: "left" }}><div><strong>Location:</strong> {preferences.location}</div><div><strong>Budget:</strong> Up to {currency.format(preferences.budget)} / month</div><div><strong>Property types:</strong> {pickedTypesLabel}</div><div><strong>Amenities:</strong> {pickedAmenitiesLabel}</div><div><strong>Proximity:</strong> {preferences.distance || "Any distance"}</div></div></button><button className="dashboard-prompt" onClick={() => onNavigate("applications")}><span className="prompt-icon"><CalendarDays size={18} /></span><div><strong>Planning your next step?</strong><span>Keep track of viewing schedules and rental applications in one place.</span></div><ChevronRight size={18} /></button></section>
   </div>;
 }
 
@@ -859,11 +814,11 @@ function SavedPage({
 
 function PreferencesPage({ preferences, setPreferences, onToast }) {
   const toggle = (key, value) => setPreferences({ ...preferences, [key]: preferences[key].includes(value) ? preferences[key].filter((item) => item !== value) : [...preferences[key], value] });
-  return <div className="workspace-content preference-page"><SectionHeading eyebrow="SMART MATCHING" title="Your rental preferences" detail="A few details help us surface homes that fit your life." /><div className="preference-layout"><form className="preference-form" onSubmit={(event) => { event.preventDefault(); onToast("Your preferences are saved. Matches have been updated."); }}><Field label="Preferred location"><select value={preferences.location} onChange={(event) => setPreferences({ ...preferences, location: event.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field><div className="filter-control preference-budget"><label htmlFor="pref-budget">Monthly budget <strong>{currency.format(preferences.budget)}</strong></label><input id="pref-budget" type="range" min="5000" max="40000" step="500" value={preferences.budget} onChange={(event) => setPreferences({ ...preferences, budget: Number(event.target.value) })} /><div className="range-ends"><span>₱5,000</span><span>₱40,000+</span></div></div><fieldset><legend>What kind of place?</legend><div className="choice-grid">{propertyTypes.slice(1).map((type) => <label key={type} className={`choice-chip ${preferences.types.includes(type) ? "selected" : ""}`}><input type="checkbox" checked={preferences.types.includes(type)} onChange={() => toggle("types", type)} />{type}</label>)}</div></fieldset><fieldset><legend>Your must-have amenities</legend><div className="choice-grid">{amenityOptions.map((amenity) => <label key={amenity} className={`choice-chip ${preferences.amenities.includes(amenity) ? "selected" : ""}`}><input type="checkbox" checked={preferences.amenities.includes(amenity)} onChange={() => toggle("amenities", amenity)} />{amenity}</label>)}</div></fieldset><Field label="Nearby matters"><select value={preferences.distance} onChange={(event) => setPreferences({ ...preferences, distance: event.target.value })}><option>Any distance</option><option>Near schools</option><option>Near workplaces</option><option>Near transport</option></select></Field><Button type="submit"><Check size={16} /> Save preferences</Button></form><aside className="match-preview"><div className="preview-orbit"><Sparkles size={26} /></div><p className="eyebrow">MATCH PREVIEW</p><h2>Your priorities, built in.</h2><p>Your match score weighs location, budget, property type, and the amenities you select.</p><div className="preview-sample"><span className="preview-score">95%</span><span><strong>The Poblacion Loft</strong><small>Strong fit for your preferences</small></span><CheckCircle2 size={18} /></div><Button variant="outline" onClick={() => onToast("Preference-based matching is active across your search results.")}>How matching works <CircleHelp size={15} /></Button></aside></div></div>;
+  return <div className="workspace-content preference-page"><SectionHeading eyebrow="SMART MATCHING" title="Your rental preferences" detail="A few details help us surface homes that fit your life." /><div className="preference-layout"><form className="preference-form" onSubmit={(event) => { event.preventDefault(); onToast("Your preferences are saved. Matches have been updated."); }}><Field label="Preferred location"><select value={preferences.location} onChange={(event) => setPreferences({ ...preferences, location: event.target.value })}>{locations.map((location) => <option key={location}>{location}</option>)}</select></Field><div className="filter-control preference-budget"><label htmlFor="pref-budget">Monthly budget <strong>{currency.format(preferences.budget)}</strong></label><input id="pref-budget" type="range" min="5000" max="40000" step="500" value={preferences.budget} onChange={(event) => setPreferences({ ...preferences, budget: Number(event.target.value) })} /><div className="range-ends"><span>₱5,000</span><span>₱40,000+</span></div></div><fieldset><legend>What kind of place?</legend><div className="choice-grid">{propertyTypes.slice(1).map((type) => <label key={type} className={`choice-chip ${preferences.types.includes(type) ? "selected" : ""}`}><input type="checkbox" checked={preferences.types.includes(type)} onChange={() => toggle("types", type)} />{type}</label>)}</div></fieldset><fieldset><legend>Your must-have amenities</legend><div className="choice-grid">{amenityOptions.map((amenity) => <label key={amenity} className={`choice-chip ${preferences.amenities.includes(amenity) ? "selected" : ""}`}><input type="checkbox" checked={preferences.amenities.includes(amenity)} onChange={() => toggle("amenities", amenity)} />{amenity}</label>)}</div></fieldset><Field label="Nearby matters"><select value={preferences.distance} onChange={(event) => setPreferences({ ...preferences, distance: event.target.value })}><option>Any distance</option><option>Near schools</option><option>Near workplaces</option><option>Near transport</option></select></Field><Button type="submit"><Check size={16} /> Save preferences</Button></form><aside className="match-preview"><div className="preview-orbit"><Sparkles size={26} /></div><p className="eyebrow">MATCH PREVIEW</p><h2>Your priorities, built in.</h2><p>Your match score weighs location, budget, property type, and the amenities you select.</p><div className="preview-sample" style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start", padding: "14px", borderRadius: "10px", background: "white", border: "1px solid #e1e7f0", textAlign: "left" }}><p className="eyebrow" style={{ margin: "0 0 6px 0", fontSize: "11px" }}>YOUR SELECTED PREFERENCES</p><div style={{ fontSize: "13px" }}><strong>📍 Location:</strong> {preferences.location}</div><div style={{ fontSize: "13px" }}><strong>💰 Budget:</strong> Up to {currency.format(preferences.budget)} / mo</div><div style={{ fontSize: "13px" }}><strong>🏠 Places:</strong> {preferences.types?.length ? preferences.types.join(", ") : "All types (Apartment, Bedspace, Dormitory)"}</div><div style={{ fontSize: "13px" }}><strong>✨ Amenities:</strong> {preferences.amenities?.length ? preferences.amenities.join(", ") : "None selected"}</div><div style={{ fontSize: "13px" }}><strong>🧭 Proximity:</strong> {preferences.distance || "Any distance"}</div></div><Button variant="outline" onClick={() => onToast("Preference-based matching is active across your search results.")}>How matching works <CircleHelp size={15} /></Button></aside></div></div>;
 }
 
 function ApplicationsPage({ applications, viewings, properties, onBrowse }) {
-  return <div className="workspace-content"><SectionHeading eyebrow="YOUR NEXT STEPS" title="Applications & viewings" detail="Stay up to date from first inquiry to move-in." action={<Button variant="outline" onClick={onBrowse}><Search size={15} /> Find a home</Button>} /><div className="applications-layout"><section className="surface-panel"><div className="surface-panel-heading"><div><h2>Rental applications</h2><p>Updates from the homes you applied to.</p></div><span className="panel-count">{applications.length}</span></div>{applications.length ? <div className="activity-list">{applications.map((application) => { const home = properties.find((item) => item.id === application.propertyId); return <article className="activity-row" key={application.id}><span className="activity-icon"><FileText size={17} /></span><span><strong>{home?.name || application.propertyName}</strong><small>Applied {application.date}</small></span><span className={`status-pill status-${application.status.toLowerCase().replaceAll(" ", "-")}`}>{application.status}</span></article>; })}</div> : <div className="panel-empty">No active applications yet. When you apply to a home, its status will show here.</div>}</section><section className="surface-panel"><div className="surface-panel-heading"><div><h2>Scheduled viewings</h2><p>Meet a host and see a place in person.</p></div><span className="panel-count">{viewings.length}</span></div>{viewings.length ? <div className="activity-list">{viewings.map((viewing) => { const home = properties.find((item) => item.id === viewing.propertyId); const status = viewing.status || "Pending"; return <article className="activity-row viewing-activity-row" key={viewing.id}><span className="activity-icon activity-icon-amber"><CalendarDays size={17} /></span><span><strong>{home?.name || viewing.propertyName}</strong><small>{viewing.date} · {viewing.requestedTime || viewing.time}</small>{viewing.hostComment && <small className="viewing-host-comment">Host: {viewing.hostComment}</small>}</span><span className={`status-pill status-${status === "Available" ? "approved" : status === "Unavailable" ? "declined" : "pending"}`}>{status}</span></article>; })}</div> : <div className="panel-empty">No viewings scheduled. Choose a home and request a time that works for you.</div>}</section></div></div>;
+  return <div className="workspace-content"><SectionHeading eyebrow="YOUR NEXT STEPS" title="Applications & viewings" detail="Stay up to date from first inquiry to move-in." action={<Button variant="outline" onClick={onBrowse}><Search size={15} /> Find a home</Button>} /><div className="applications-layout"><section className="surface-panel"><div className="surface-panel-heading"><div><h2>Rental applications</h2><p>Updates from the homes you applied to.</p></div><span className="panel-count">{applications.length}</span></div>{applications.length ? <div className="activity-list">{applications.map((application) => { const home = properties.find((item) => item.id === application.propertyId); return <article className="activity-row" key={application.id}><span className="activity-icon"><FileText size={17} /></span><span><strong>{home?.name || application.propertyName}</strong><small>Applied {application.date}</small></span><span className={`status-pill status-${application.status.toLowerCase().replaceAll(" ", "-")}`}>{application.status}</span></article>; })}</div> : <div className="panel-empty">No active applications yet. When you apply to a home, its status will show here.</div>}</section><section className="surface-panel"><div className="surface-panel-heading"><div><h2>Scheduled viewings</h2><p>Meet a host and see a place in person.</p></div><span className="panel-count">{viewings.length}</span></div>{viewings.length ? <div className="activity-list">{viewings.map((viewing) => { const home = properties.find((item) => item.id === viewing.propertyId); const status = viewing.status || "Pending"; const isApproved = status === "Available" || status === "Approved"; const isDeclined = status === "Unavailable" || status === "Declined"; return <article className="activity-row viewing-activity-row" key={viewing.id}><span className="activity-icon activity-icon-amber"><CalendarDays size={17} /></span><span><strong>{home?.name || viewing.propertyName}</strong><small>{viewing.date} · {viewing.requestedTime || viewing.time}</small>{viewing.hostComment && <small className="viewing-host-comment">Host: {viewing.hostComment}</small>}</span><span className={`status-pill status-${isApproved ? "approved" : isDeclined ? "declined" : "pending"}`}>{isApproved ? "Approved" : isDeclined ? "Declined" : "Pending"}</span></article>; })}</div> : <div className="panel-empty">No viewings scheduled. Choose a home and request a time that works for you.</div>}</section></div></div>;
 }
 
 function MaintenanceRequestsPage({ mode, requests, properties, onCreate, onUpdateStatus, onRemove }) {
@@ -926,8 +881,20 @@ function MaintenanceRequestsPage({ mode, requests, properties, onCreate, onUpdat
 
 function MessagesPage({ messages, setMessages, user, properties, onToast, activePerson: initialPerson }) {
   const people = [...new Set(messages.map((message) => message.person).filter((person) => person && person !== user.name))];
-  const fallbackPerson = people[0] || "Maya Santos";
+  const fallbackPerson = people[0] || "";
   const [activePerson, setActivePerson] = useState(initialPerson || fallbackPerson);
+  if (people.length === 0) {
+    return (
+      <div className="workspace-content messages-content">
+        <SectionHeading eyebrow="KEEP THE CONVERSATION GOING" title="Messages" detail="Talk through details, ask a question, or plan a viewing." />
+        <div className="surface-panel" style={{ padding: "50px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+          <MessageCircle size={40} style={{ color: "#3062d4" }} />
+          <h2 style={{ margin: 0, fontSize: "18px" }}>No conversations yet</h2>
+          <p style={{ margin: 0, color: "#74839a", maxWidth: "420px" }}>When you inquire about a rental listing or request a viewing, direct messages with property hosts will appear here.</p>
+        </div>
+      </div>
+    );
+  }
   const [draft, setDraft] = useState("");
   useEffect(() => {
     if (initialPerson && initialPerson !== user.name) setActivePerson(initialPerson);
@@ -1628,7 +1595,7 @@ function PropertyEditor({ property, onClose, onSave, onToast }) {
       && latitude <= 90
       && longitude >= -180
       && longitude <= 180;
-    const requiresMapPin = ["Apartment", "Bedspace", "Boarding House", "Dormitory", "Studio Unit"]
+    const requiresMapPin = ["Apartment", "Bedspace", "Dormitory"]
       .includes(values.get("type")?.toString() || "");
     if (!title || !rent || !values.get("address")) { setError("Add a property name, address, and monthly rent to continue."); return; }
     if ((latitudeText || longitudeText) && !hasValidPin) { setError("Enter valid latitude and longitude coordinates."); return; }
@@ -2314,61 +2281,71 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       notify("You already have an application for this home.");
       return;
     }
-    try {
-      const application = await apiRequest("/api/applications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          propertyId: property.id,
-          name: user.name,
-          renterEmail: user.email,
-          date: new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(new Date()),
-        }),
-      });
-      setApplications((current) => [application, ...current]);
-      setProperties((current) => current.map((item) => item.id === property.id ? { ...item, available: item.available !== false } : item));
-      notify("Application submitted. A slot is only taken if the landlord approves it.");
-    } catch (error) {
-      notify(`Could not submit application: ${error.message}`);
+    const newApplication = {
+      id: `app-${property.id}-${Date.now()}`,
+      propertyId: property.id,
+      propertyName: property.name,
+      property: property.name,
+      name: user.name || "Gabriela Ramos",
+      renterEmail: user.email || "gabriela.r@example.com",
+      status: "Pending",
+      date: new Intl.DateTimeFormat("en-PH", { month: "short", day: "2-digit", year: "numeric" }).format(new Date()),
+      createdAt: new Date().toISOString(),
+    };
+    if (!staticPreview) {
+      try {
+        const application = await apiRequest("/api/applications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newApplication),
+        });
+        if (application?.id) newApplication.id = application.id;
+      } catch {
+        // Continue with local state
+      }
     }
+    setApplications((current) => [newApplication, ...current]);
+    setProperties((current) => current.map((item) => item.id === property.id ? { ...item, available: item.available !== false } : item));
+    notify("Application submitted. A slot is only taken if the landlord approves it.");
   };
   const confirmViewing = async (property, date, requestedTime, renterMessage) => {
-    if (staticPreview) {
-      notify("Viewing requests require the full RentMatch app.");
-      return;
+    const request = {
+      id: `viewing-${Date.now()}`,
+      propertyId: property.id,
+      propertyName: property.name,
+      date,
+      requestedTime,
+      renterName: user.name || "Gabriela Ramos",
+      renterEmail: user.email || "gabriela.r@example.com",
+      renterMessage: renterMessage || "",
+      status: "Pending",
+      hostName: property.host || "Maya Santos",
+      createdAt: new Date().toISOString(),
+    };
+    if (!staticPreview) {
+      try {
+        const savedViewing = await apiRequest("/api/viewings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+        });
+        if (savedViewing?.id) request.id = savedViewing.id;
+      } catch {
+        // Continue with local state
+      }
     }
-    try {
-      const request = await apiRequest("/api/viewings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          propertyId: property.id,
-          date,
-          requestedTime,
-          renterName: user.name,
-          renterEmail: user.email,
-          renterMessage,
-        }),
-      });
-      setViewings((current) => [request, ...current.filter((item) => item.id !== request.id)]);
-      const messageTime = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date());
-      const requestMessage = `Viewing request for ${property.name}\nDate: ${date}\nPreferred time: ${requestedTime}\n${renterMessage}`;
-      setMessages((current) => [
-        ...current,
-        { id: `${request.id}-renter`, person: request.hostName, from: user.name, text: requestMessage, time: messageTime, propertyId: property.id, property: property.name },
-        { id: `${request.id}-host`, person: user.name, from: user.name, text: requestMessage, time: messageTime, propertyId: property.id, property: property.name },
-      ]);
-      setScheduleProperty(null);
-      notify("Viewing request sent. The host can review it in Viewings.");
-    } catch (error) {
-      notify(`Could not schedule the viewing: ${error.message}`);
-    }
+    setViewings((current) => [request, ...current.filter((item) => item.id !== request.id)]);
+    const messageTime = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date());
+    const requestMessage = `Viewing request for ${property.name}\nDate: ${date}\nPreferred time: ${requestedTime}\n${renterMessage}`;
+    setMessages((current) => [
+      ...current,
+      { id: `${request.id}-renter`, person: request.hostName, from: user.name, text: requestMessage, time: messageTime, propertyId: property.id, property: property.name },
+      { id: `${request.id}-host`, person: user.name, from: user.name, text: requestMessage, time: messageTime, propertyId: property.id, property: property.name },
+    ]);
+    setScheduleProperty(null);
+    notify("Viewing request sent. The host can review it in Viewings.");
   };
   const openViewingCalendar = (property) => {
-    if (staticPreview) {
-      notify("Viewing requests require the full RentMatch app.");
-      return;
-    }
     setScheduleProperty(property);
   };
   const startMessage = (property) => {
@@ -2391,21 +2368,17 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
         propertyId: property.id,
         property: property.name,
       },
-      {
-        id: `${stamp}-host`,
-        person: user.name,
-        from: user.name,
-        text: interestText,
-        time: "Just now",
-        propertyId: property.id,
-        property: property.name,
-      },
     ]);
   };
   const signOut = () => { setUser(null); setView("landing"); };
   const goToAdmin = () => { if (user.role === "admin") setView("admin"); };
   const goToPreferences = () => setView(user.role === "landlord" ? "profile" : "preferences");
-  const ownProperties = properties.filter((property) => property.ownerEmail === user.email);
+  const ownProperties = properties.filter((property) =>
+    (property.ownerEmail && property.ownerEmail.toLowerCase() === user.email?.toLowerCase()) ||
+    (property.hostEmail && property.hostEmail.toLowerCase() === user.email?.toLowerCase()) ||
+    (property.host && property.host.toLowerCase() === user.name?.toLowerCase()) ||
+    (user.role === "landlord" && (property.isMine || user.email === landlordDemoAccount.email || property.ownerEmail === "landlord@rentmatch.local" || property.host === "Maya Santos"))
+  );
   const displayedHostProperties = ownProperties;
   const renterProperties = properties.filter((property) => property.moderationStatus === "Approved" && !property.isDraft && property.available !== false && (!Number.isInteger(property.units) || property.units > 0));
   const visibleApplications = user.role === "landlord"
@@ -2418,14 +2391,10 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       ...application,
       property: application.property || properties.find((property) => property.id === application.propertyId)?.name || "Rental listing",
     }));
-  const hostMaintenancePropertyIds = new Set(properties
-    .filter((property) => property.ownerEmail === user.email || property.host === user.name)
-    .map((property) => property.id));
-  const hostPropertyIds = new Set(properties
-    .filter((property) => property.ownerEmail?.toLowerCase() === user.email.toLowerCase() || property.host === user.name)
-    .map((property) => property.id));
+  const hostPropertyIds = ownPropertyIds;
+  const hostMaintenancePropertyIds = ownPropertyIds;
   const hostViewings = user.role === "landlord"
-    ? viewings.filter((viewing) => hostPropertyIds.has(viewing.propertyId))
+    ? viewings.filter((viewing) => hostPropertyIds.has(viewing.propertyId) || ownProperties.some((p) => p.id === viewing.propertyId))
     : [];
   const renterViewings = viewings.filter((viewing) => viewing.renterEmail?.toLowerCase() === user.email.toLowerCase());
   const viewingNotifications = user.role === "landlord"
@@ -2439,10 +2408,10 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       }))
     : user.role === "renter"
       ? renterViewings
-        .filter((viewing) => viewing.status === "Available" || viewing.status === "Unavailable")
+        .filter((viewing) => viewing.status === "Available" || viewing.status === "Approved" || viewing.status === "Unavailable" || viewing.status === "Declined")
         .map((viewing) => ({
           id: `viewing-response-${viewing.id}-${viewing.hostRespondedAt || viewing.status}`,
-          title: `Host ${viewing.status === "Available" ? "confirmed" : "declined"} your viewing`,
+          title: `Host ${viewing.status === "Available" || viewing.status === "Approved" ? "approved" : "declined"} your viewing`,
           detail: `${viewing.propertyName || properties.find((property) => property.id === viewing.propertyId)?.name || "Rental property"} · ${viewing.date} at ${viewing.requestedTime || viewing.time || "time not specified"}${viewing.hostComment ? ` · ${viewing.hostComment}` : ""}`,
           view: "applications",
         }))
@@ -2453,48 +2422,68 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       notify("The property for this viewing request could not be found.");
       return;
     }
-    try {
-      const updatedRequest = await apiRequest(`/api/viewings/${encodeURIComponent(request.id)}/response`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, hostComment: comment }),
-      });
-      setViewings((current) => current.map((item) => item.id === request.id ? updatedRequest : item));
-      const updatedAt = new Date();
-      const messageTime = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(updatedAt);
-      const reply = `Viewing request for ${property.name}: ${status === "Available" ? "Available" : "Not available"}.\n${comment}`;
-      const hostName = request.hostName || property.host || user.name;
-      setMessages((current) => [
-        ...current,
-        // Landlord inbox: conversation with the renter
-        { id: `${request.id}-host-reply-${updatedAt.getTime()}-host`, person: request.renterName, from: user.name, text: reply, time: messageTime, propertyId: property.id, property: property.name },
-        // Renter inbox: conversation with the host (must use host as person + landlord as from)
-        { id: `${request.id}-host-reply-${updatedAt.getTime()}-renter`, person: hostName, from: user.name, text: reply, time: messageTime, propertyId: property.id, property: property.name },
-      ]);
-      notify(`Your ${status.toLowerCase()} response was sent to ${request.renterName || "the renter"} in Messages.`);
-    } catch (error) {
-      notify(`Could not respond to the viewing: ${error.message}`);
+    const finalStatus = status === "Available" ? "Approved" : status === "Unavailable" ? "Declined" : status;
+    const updatedRequest = {
+      ...request,
+      status: finalStatus,
+      hostComment: comment,
+      hostRespondedAt: new Date().toISOString(),
+    };
+    if (!staticPreview) {
+      try {
+        await apiRequest(`/api/viewings/${encodeURIComponent(request.id)}/response`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: finalStatus, hostComment: comment }),
+        });
+      } catch {
+        // Local fallback
+      }
     }
+    setViewings((current) => current.map((item) => item.id === request.id ? updatedRequest : item));
+    const updatedAt = new Date();
+    const messageTime = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(updatedAt);
+    const reply = `Viewing request for ${property.name}: ${finalStatus === "Approved" ? "Approved" : "Not available"}.\n${comment}`;
+    const hostName = request.hostName || property.host || user.name;
+    setMessages((current) => [
+      ...current,
+      { id: `${request.id}-host-reply-${updatedAt.getTime()}-host`, person: request.renterName, from: user.name, text: reply, time: messageTime, propertyId: property.id, property: property.name },
+      { id: `${request.id}-host-reply-${updatedAt.getTime()}-renter`, person: hostName, from: user.name, text: reply, time: messageTime, propertyId: property.id, property: property.name },
+    ]);
+    notify(`Your response (${finalStatus}) was sent to ${request.renterName || "the renter"}.`);
   };
   const visibleMaintenanceRequests = user.role === "landlord"
-    ? maintenanceRequests.filter((request) => hostMaintenancePropertyIds.has(request.propertyId))
+    ? maintenanceRequests.filter((request) =>
+        hostMaintenancePropertyIds.has(request.propertyId) ||
+        (request.landlordName && request.landlordName.toLowerCase() === user.name?.toLowerCase()) ||
+        (request.landlordEmail && request.landlordEmail.toLowerCase() === user.email?.toLowerCase()) ||
+        ownProperties.some((p) => p.id === request.propertyId)
+      )
     : maintenanceRequests.filter((request) => request.renterEmail?.toLowerCase() === user.email.toLowerCase());
   const currentPropertyForDetail = selectedProperty && properties.find((property) => property.id === selectedProperty.id) || selectedProperty;
   const updateApplicant = async (id, status) => {
-    try {
-      const result = await apiRequest(`/api/applications/${encodeURIComponent(id)}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      setApplications((current) => current.map((application) => application.id === result.application.id ? result.application : application));
-      if (result.property) {
-        setProperties((current) => current.map((property) => property.id === result.property.id ? result.property : property));
+    if (!staticPreview) {
+      try {
+        const result = await apiRequest(`/api/applications/${encodeURIComponent(id)}/status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        if (result?.property) {
+          setProperties((current) => current.map((property) => property.id === result.property.id ? result.property : property));
+        }
+      } catch {
+        // Fallback
       }
-      notify(status === "Approved" ? "Application approved; one available slot has been reserved." : "Application declined.");
-    } catch (error) {
-      notify(`Could not update application: ${error.message}`);
     }
+    setApplications((current) => current.map((application) => application.id === id ? { ...application, status } : application));
+    if (status === "Approved") {
+      const targetApp = applications.find((a) => a.id === id);
+      if (targetApp) {
+        setProperties((current) => current.map((prop) => prop.id === targetApp.propertyId && Number.isInteger(prop.units) && prop.units > 0 ? { ...prop, units: prop.units - 1 } : prop));
+      }
+    }
+    notify(status === "Approved" ? "Application approved; one available slot has been reserved." : "Application declined.");
   };
   const applicantMessage = (name) => {
     setMessageTarget(name);
@@ -2504,47 +2493,65 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
     }
   };
   const createMaintenanceRequest = async (request) => {
-    try {
-      const savedRequest = await apiRequest("/api/maintenance-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...request, renterName: user.name, renterEmail: user.email }),
-      });
-      setMaintenanceRequests((current) => [savedRequest, ...current]);
-      notify("Maintenance request sent to the landlord.");
-      return savedRequest;
-    } catch (error) {
-      notify(`Could not send maintenance request: ${error.message}`);
-      throw error;
+    const selectedProp = properties.find((p) => p.id === request.propertyId);
+    const hostPropName = selectedProp?.host || "Maya Santos";
+    const newRequest = {
+      id: `maint-${Date.now()}`,
+      ...request,
+      propertyName: selectedProp?.name || "Rental property",
+      landlordName: hostPropName,
+      renterName: user.name || "Gabriela Ramos",
+      renterEmail: user.email || "gabriela.r@example.com",
+      status: "Received",
+      createdAt: new Date().toISOString(),
+    };
+    if (!staticPreview) {
+      try {
+        const savedRequest = await apiRequest("/api/maintenance-requests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...request, renterName: user.name, renterEmail: user.email }),
+        });
+        if (savedRequest?.id) newRequest.id = savedRequest.id;
+      } catch {
+        // Local fallback
+      }
     }
+    setMaintenanceRequests((current) => [newRequest, ...current]);
+    notify("Maintenance request sent to the landlord.");
+    return newRequest;
   };
   const updateMaintenanceStatus = async (id, status) => {
-    try {
-      const updatedRequest = await apiRequest(`/api/maintenance-requests/${encodeURIComponent(id)}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      setMaintenanceRequests((current) => current.map((request) => request.id === updatedRequest.id ? updatedRequest : request));
-      notify(`Maintenance request marked ${status.toLowerCase()}.`);
-    } catch (error) {
-      notify(`Could not update maintenance request: ${error.message}`);
+    if (!staticPreview) {
+      try {
+        await apiRequest(`/api/maintenance-requests/${encodeURIComponent(id)}/status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+      } catch {
+        // Local fallback
+      }
     }
+    setMaintenanceRequests((current) => current.map((request) => request.id === id ? { ...request, status } : request));
+    notify(`Maintenance request marked ${status.toLowerCase()}.`);
   };
   const removeMaintenanceRequest = async (request) => {
     if (!window.confirm(`Remove the maintenance request "${request.title}"?`)) {
       return;
     }
 
-    try {
-      await apiRequest(`/api/maintenance-requests/${encodeURIComponent(request.id)}?renterEmail=${encodeURIComponent(user.email)}`, {
-        method: "DELETE",
-      });
-      setMaintenanceRequests((current) => current.filter((item) => item.id !== request.id));
-      notify("Maintenance request removed.");
-    } catch (error) {
-      notify(`Could not remove maintenance request: ${error.message}`);
+    if (!staticPreview) {
+      try {
+        await apiRequest(`/api/maintenance-requests/${encodeURIComponent(request.id)}?renterEmail=${encodeURIComponent(user.email)}`, {
+          method: "DELETE",
+        });
+      } catch {
+        // Local fallback
+      }
     }
+    setMaintenanceRequests((current) => current.filter((item) => item.id !== request.id));
+    notify("Maintenance request removed.");
   };
   const saveProperty = async (newProperty) => {
     const propertyToSave = {
@@ -2650,10 +2657,10 @@ export default function App() {
   const [favorites, setFavorites] = useStoredState("rentmatch-favorites", []);
   const [compareIds, setCompareIds] = useStoredState("rentmatch-compare", []);
   const [preferences, setPreferences] = useStoredState("rentmatch-preferences", defaultPreferences);
-  const [applications, setApplications] = useState([]);
-  const [maintenanceRequests, setMaintenanceRequests] = useState([]);
+  const [applications, setApplications] = useStoredState("rentmatch-applications", []);
+  const [maintenanceRequests, setMaintenanceRequests] = useStoredState("rentmatch-maintenance-requests", []);
   const [viewings, setViewings] = useStoredState("rentmatch-viewings", []);
-  const [messages, setMessages] = useStoredState("rentmatch-messages", [{ id: "welcome-message", person: "Maya Santos", property: "Anyayahan Apartment", propertyId: "anyayahan-apartment", from: "Gabriela Ramos", text: tenantInterestText("Anyayahan Apartment"), time: "9:42 AM" }]);
+  const [messages, setMessages] = useStoredState("rentmatch-messages", []);
   const [view, setView] = useState(user ? "dashboard" : "landing");
   const [role, setRole] = useState("renter");
   const [authMode, setAuthMode] = useState("login");

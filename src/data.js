@@ -1,4 +1,4 @@
-const propertyCatalog = [
+const rawPropertyCatalog = [
   {
     id: "balagtas-courtyard", name: "Balagtas Courtyard Home", location: "Balagtas", address: "Balagtas, Batangas City", type: "House", price: 24500, deposit: 24500, bedrooms: 3, bathrooms: 2, units: 1, rating: 4.9, reviews: 9,
     image: "https://images.unsplash.com/photo-1510798831971-661eb04b3739?auto=format&fit=crop&w=1200&q=85", label: "FAMILY READY", host: "Noel Reyes", hostSince: "Hosting since 2018", description: "A generous, family-friendly home with a shaded courtyard, practical storage, and room to settle in for the long term.", amenities: ["Parking", "Kitchen", "Laundry area", "Furnished", "Air conditioning"], distance: "10 min to Batangas City Hall", available: true
@@ -85,6 +85,9 @@ const propertyCatalog = [
   }
 ];
 
+const allowedTypes = new Set(["Apartment", "Bedspace", "Dormitory"]);
+const propertyCatalog = rawPropertyCatalog.filter((property) => allowedTypes.has(property.type));
+
 const publicAssetUrl = (path) => path.startsWith("/")
   ? `${import.meta.env.BASE_URL}${path.slice(1)}`
   : path;
@@ -102,6 +105,6 @@ export const initialProperties = propertyCatalog
   }));
 
 export const locations = ["All locations", "Poblacion", "Kumintang", "Alangilan", "Balagtas", "Other areas"];
-export const propertyTypes = ["All types", "Apartment", "Bedspace", "Boarding House", "Dormitory", "Studio Unit", "House"];
+export const propertyTypes = ["All types", "Apartment", "Bedspace", "Dormitory"];
 export const amenityOptions = ["Wi-Fi", "Air conditioning", "Parking", "Laundry area", "Furnished", "Kitchen"];
 export const defaultPreferences = { location: "All locations", budget: 20000, types: [], amenities: [], distance: "Any distance" };
