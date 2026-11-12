@@ -16,6 +16,37 @@ const staticPreview = import.meta.env.VITE_STATIC_PREVIEW === "true";
 const adminDemoAccount = { email: "admin@rentmatch.local", password: "RentMatch123", name: "RentMatch Admin" };
 const landlordDemoAccount = { email: "landlord@rentmatch.local", password: "RentMatch123", name: "Maya Santos" };
 
+function propertyImageUrl(image) {
+  if (!image) return fallbackImage;
+  if (/^(?:data:|blob:|https?:)/i.test(image)) return image;
+  const base = import.meta.env.BASE_URL;
+  let path = image.replace(/^\/+/, "");
+  const basePath = base.replace(/^\/+|\/+$/g, "");
+  if (basePath && path.startsWith(`${basePath}/`)) path = path.slice(basePath.length + 1);
+  if (!/^(?:wwwroot\/)?Images\//i.test(path)) return image;
+  path = path.replace(/^(?:wwwroot\/)?Images\//i, "");
+  return `${base}wwwroot/Images/${path}`;
+}
+
+function useFallbackImage(event) {
+  event.currentTarget.onerror = null;
+  event.currentTarget.src = fallbackImage;
+}
+
+function messageGroupId(message) {
+  if (message.groupId) return String(message.groupId);
+  return String(message.id ?? `${message.person}:${message.from}:${message.time}:${message.text}`)
+    .replace(/-(?:renter|host|out|in)$/, "");
+}
+
+function normalizeStoredProperty(property) {
+  return {
+    ...property,
+    ...(property.image ? { image: propertyImageUrl(property.image) } : {}),
+    ...(Array.isArray(property.images) ? { images: property.images.map(propertyImageUrl) } : {}),
+  };
+}
+
 async function apiRequest(url, options) {
   if (staticPreview) {
     throw new Error("Server-backed actions are unavailable in this GitHub Pages preview.");
@@ -63,7 +94,7 @@ function useStoredState(key, initialValue) {
         const mergedInitial = initialFiltered.map((property) => {
           const stored = storedById.get(property.id);
           if (!stored) return property;
-          const merged = { ...property, ...stored };
+          const merged = normalizeStoredProperty({ ...property, ...stored });
           if (property.id === "anyayahan-apartment") {
             merged.latitude = 13.758735861415932;
             merged.longitude = 121.0705346512765;
@@ -73,13 +104,15 @@ function useStoredState(key, initialValue) {
           }
           return merged;
         });
-        const userAdded = parsed.filter((property) => allowedTypes.has(property.type) && !initialIds.has(property.id));
+        const userAdded = parsed.filter((property) => allowedTypes.has(property.type) && !initialIds.has(property.id)).map(normalizeStoredProperty);
         return [...userAdded, ...mergedInitial];
       }
       if (key === "rentmatch-preferences" && parsed && typeof parsed === "object") {
         return {
+          ...defaultPreferences,
           ...parsed,
           types: Array.isArray(parsed.types) ? parsed.types.filter((t) => allowedTypes.has(t)) : [],
+          amenities: Array.isArray(parsed.amenities) ? parsed.amenities : [],
         };
       }
       if (key === "rentmatch-messages") return [];
@@ -128,25 +161,36 @@ function displayPrice(property) {
 }
 
 function getMatchScore(property, preferences) {
-  let score = 20;
-  if (preferences.location === "All locations") score += 8;
-  else if (property.location.toLowerCase().includes(preferences.location.toLowerCase())) score += 22;
-  else score += 2;
-  if (property.price <= Number(preferences.budget)) {
-    score += 12 + Math.round(10 * (1 - property.price / Number(preferences.budget)));
-  }
-  if (!preferences.types?.length) score += 8;
-  else if (preferences.types.includes(property.type)) score += 18;
-  else score += 2;
-  if (preferences.amenities?.length) {
-    const matching = preferences.amenities.filter((amenity) => property.amenities.includes(amenity)).length;
-    score += Math.round((matching / preferences.amenities.length) * 15);
-  } else score += 8;
-  if (preferences.distance === "Any distance") score += 5;
-  else if (preferences.distance === "Near schools" && property.distance.toLowerCase().includes("university")) score += 10;
-  else if (preferences.distance === "Near transport" && property.distance.toLowerCase().includes("transport")) score += 10;
-  else if (preferences.distance !== "Any distance") score += 2;
-  return Math.max(52, Math.min(98, score));
+  const location = property.location || "";
+  const locationPreference = preferences.location || "All locations";
+  const locationMatches = locationPreference === "Other areas"
+    ? !["Poblacion", "Kumintang", "Alangilan", "Balagtas"].some((area) => location.includes(area))
+    : location.toLowerCase().includes(locationPreference.toLowerCase());
+  const locationScore = locationPreference === "All locations" ? 25 : locationMatches ? 25 : 0;
+  const budget = Math.max(1, Number(preferences.budget) || Number(defaultPreferences.budget));
+  const listedPrices = property.priceOptions?.length
+    ? property.priceOptions.map((option) => Number(option.price)).filter(Number.isFinite)
+    : [Number(property.price)];
+  const lowestPrice = Math.min(...listedPrices.filter((price) => price > 0));
+  const budgetScore = Number.isFinite(lowestPrice)
+    ? lowestPrice <= budget ? 30 : 30 * Math.max(0, 1 - (lowestPrice - budget) / budget)
+    : 0;
+  const types = Array.isArray(preferences.types) ? preferences.types : [];
+  const typeScore = !types.length || types.includes(property.type) ? 20 : 0;
+  const amenities = Array.isArray(preferences.amenities) ? preferences.amenities : [];
+  const matchedAmenities = amenities.filter((amenity) => property.amenities?.includes(amenity)).length;
+  const amenityScore = amenities.length ? 15 * matchedAmenities / amenities.length : 15;
+  const distance = (property.distance || "").toLowerCase();
+  const distancePreference = preferences.distance || "Any distance";
+  const distanceMatches = distancePreference === "Near schools"
+    ? /school|university|college|campus|sti|lpu/.test(distance)
+    : distancePreference === "Near workplaces"
+      ? /workplace|business|industrial|employment|lima/.test(distance)
+      : distancePreference === "Near transport"
+        ? /transport|transit|terminal|jeepney|bus|commute|one ride/.test(distance)
+        : true;
+  const distanceScore = distancePreference === "Any distance" || distanceMatches ? 10 : 0;
+  return Math.round(locationScore + budgetScore + typeScore + amenityScore + distanceScore);
 }
 
 function Brand({ onClick, inverse = false }) {
@@ -184,7 +228,8 @@ function PropertyCard({
       >
         <img
           className="property-image"
-          src={property.image || fallbackImage}
+          src={propertyImageUrl(property.image)}
+          onError={useFallbackImage}
           alt={`${property.name} rental in ${property.location}`}
           loading="lazy"
         />
@@ -883,6 +928,10 @@ function MessagesPage({ messages, setMessages, user, properties, onToast, active
   const people = [...new Set(messages.map((message) => message.person).filter((person) => person && person !== user.name))];
   const fallbackPerson = people[0] || "";
   const [activePerson, setActivePerson] = useState(initialPerson || fallbackPerson);
+  const [draft, setDraft] = useState("");
+  useEffect(() => {
+    if (initialPerson && initialPerson !== user.name) setActivePerson(initialPerson);
+  }, [initialPerson, user.name]);
   if (people.length === 0) {
     return (
       <div className="workspace-content messages-content">
@@ -895,10 +944,6 @@ function MessagesPage({ messages, setMessages, user, properties, onToast, active
       </div>
     );
   }
-  const [draft, setDraft] = useState("");
-  useEffect(() => {
-    if (initialPerson && initialPerson !== user.name) setActivePerson(initialPerson);
-  }, [initialPerson, user.name]);
   const selectedPerson = people.includes(activePerson) ? activePerson : fallbackPerson;
   const currentMessages = messages.filter((message) => message.person === selectedPerson);
   const conversationProperty = properties.find((property) => property.id === currentMessages.findLast((message) => message.propertyId)?.propertyId)
@@ -911,17 +956,24 @@ function MessagesPage({ messages, setMessages, user, properties, onToast, active
     const stamp = Date.now();
     setMessages((current) => [
       ...current,
-      { id: `${stamp}-out`, person: selectedPerson, from: user.name, text, time: "Just now", propertyId: conversationProperty?.id, property: conversationProperty?.name },
-      { id: `${stamp}-in`, person: user.name, from: user.name, text, time: "Just now", propertyId: conversationProperty?.id, property: conversationProperty?.name },
+      { id: `${stamp}-out`, groupId: stamp, person: selectedPerson, from: user.name, text, time: "Just now", propertyId: conversationProperty?.id, property: conversationProperty?.name },
+      { id: `${stamp}-in`, groupId: stamp, person: user.name, from: user.name, text, time: "Just now", propertyId: conversationProperty?.id, property: conversationProperty?.name },
     ]);
     setDraft("");
   };
-  return <div className="workspace-content messages-content"><SectionHeading eyebrow="KEEP THE CONVERSATION GOING" title="Messages" detail="Talk through details, ask a question, or plan a viewing." /><div className="chat-layout"><aside className="conversation-list"><div className="conversation-search"><Search size={15} /><input aria-label="Search conversations" placeholder="Search messages" /></div>{people.map((person) => <button key={person} className={`conversation-item ${person === selectedPerson ? "active" : ""}`} onClick={() => setActivePerson(person)}><span className="conversation-avatar">{person.charAt(0)}</span><span><strong>{person}</strong><small>{messages.findLast((message) => message.person === person)?.text || "Start a conversation"}</small></span><span className="conversation-time">Now</span></button>)}</aside><section className="chat-panel"><header className="chat-header"><span className="conversation-avatar">{selectedPerson.charAt(0)}</span><span><strong>{selectedPerson}</strong><small><i /> Usually replies within a day</small></span><button className="icon-button" aria-label="Contact details" onClick={() => onToast("Contact details are shared after a host responds to your inquiry.")}><MoreHorizontal size={20} /></button></header><div className="chat-property-context"><img src={conversationProperty?.image || fallbackImage} alt="" /><span><small>ABOUT THE LISTING</small><strong>{conversationProperty?.name || "Rental inquiry"}</strong></span><span className="chat-context-price">{currency.format(conversationProperty?.price || 0)}<small> / month</small></span></div><div className="chat-messages" aria-live="polite">{currentMessages.length ? currentMessages.map((message) => <div key={message.id} className={`chat-message ${isMineMessage(message, user) ? "mine" : "theirs"}`}><p>{message.text}</p><small>{message.time}</small></div>) : <div className="chat-start"><MessageCircle size={22} /><p>Say hello to {selectedPerson} about a rental.</p></div>}</div><form className="chat-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." aria-label="Write a message" /><Button type="submit" aria-label="Send message"><Send size={16} /></Button></form><p className="chat-disclaimer">Messages are saved in this browser for this demo.</p></section></div></div>;
+  const unsend = (message) => {
+    const targetGroup = messageGroupId(message);
+    setMessages((current) => current.filter((item) => messageGroupId(item) !== targetGroup));
+    onToast("Message unsent for everyone.");
+  };
+  return <div className="workspace-content messages-content"><SectionHeading eyebrow="KEEP THE CONVERSATION GOING" title="Messages" detail="Talk through details, ask a question, or plan a viewing." /><div className="chat-layout"><aside className="conversation-list"><div className="conversation-search"><Search size={15} /><input aria-label="Search conversations" placeholder="Search messages" /></div>{people.map((person) => <button key={person} className={`conversation-item ${person === selectedPerson ? "active" : ""}`} onClick={() => setActivePerson(person)}><span className="conversation-avatar">{person.charAt(0)}</span><span><strong>{person}</strong><small>{messages.findLast((message) => message.person === person)?.text || "Start a conversation"}</small></span><span className="conversation-time">Now</span></button>)}</aside><section className="chat-panel"><header className="chat-header"><span className="conversation-avatar">{selectedPerson.charAt(0)}</span><span><strong>{selectedPerson}</strong><small><i /> Usually replies within a day</small></span><button className="icon-button" aria-label="Contact details" onClick={() => onToast("Contact details are shared after a host responds to your inquiry.")}><MoreHorizontal size={20} /></button></header><div className="chat-property-context"><img src={propertyImageUrl(conversationProperty?.image)} onError={useFallbackImage} alt="" /><span><small>ABOUT THE LISTING</small><strong>{conversationProperty?.name || "Rental inquiry"}</strong></span><span className="chat-context-price">{currency.format(conversationProperty?.price || 0)}<small> / month</small></span></div><div className="chat-messages" aria-live="polite">{currentMessages.length ? currentMessages.map((message) => <div key={message.id} className={`chat-message ${isMineMessage(message, user) ? "mine" : "theirs"}`}><p>{message.text}</p><small>{message.time}</small><button className="unsend-message" type="button" onClick={() => unsend(message)} aria-label="Unsend for everyone" title="Unsend for everyone"><Trash2 size={12} /> Unsend for everyone</button></div>) : <div className="chat-start"><MessageCircle size={22} /><p>Say hello to {selectedPerson} about a rental.</p></div>}</div><form className="chat-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." aria-label="Write a message" /><Button type="submit" aria-label="Send message"><Send size={16} /></Button></form><p className="chat-disclaimer">Messages are saved in this browser for this demo.</p></section></div></div>;
 }
 
 function HostViewingRequests({ viewings, properties, onRespond }) {
   const propertyById = new Map(properties.map((property) => [property.id, property]));
-  const requests = viewings.filter((viewing) => propertyById.has(viewing.propertyId));
+  const requests = viewings.filter((viewing) =>
+    propertyById.has(viewing.propertyId) && (viewing.status || "Pending").toLowerCase() === "pending",
+  );
   return (
     <div className="workspace-content">
       <SectionHeading eyebrow="VIEWING REQUESTS" title="Renter viewing requests" detail="Review proposed dates and times, then confirm availability with a message." />
@@ -993,9 +1045,9 @@ function PropertyDetails({
 }) {
   const [applied, setApplied] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
-  const propertyImages = property.images?.length
+  const propertyImages = (property.images?.length
     ? property.images
-    : [property.image || fallbackImage];
+    : [property.image || fallbackImage]).map(propertyImageUrl);
   const hasExactPin = Number.isFinite(property.latitude)
     && Number.isFinite(property.longitude)
     && property.latitude >= -90
@@ -1042,6 +1094,7 @@ function PropertyDetails({
           <div className="gallery-main">
             <img
               src={propertyImages[activeImage]}
+              onError={useFallbackImage}
               alt={`${property.name} photo ${activeImage + 1}`}
             />
             {propertyImages.length > 1 && (
@@ -1079,6 +1132,7 @@ function PropertyDetails({
                 >
                   <img
                     src={image}
+                    onError={useFallbackImage}
                     alt={`${property.name} photo ${index + 2}`}
                   />
                 </button>
@@ -1915,7 +1969,7 @@ function AdminPage({ properties, setProperties, onToast }) {
     try {
       const serverProperties = await apiRequest("/api/properties");
       if (serverProperties && Array.isArray(serverProperties)) {
-        setProperties(serverProperties);
+        setProperties(serverProperties.map(normalizeStoredProperty));
       }
       const serverAccounts = await apiRequest("/api/accounts");
       if (serverAccounts && Array.isArray(serverAccounts) && serverAccounts.length > 0) {
@@ -1948,7 +2002,7 @@ function AdminPage({ properties, setProperties, onToast }) {
       }
       try {
         const serverProperties = await apiRequest("/api/properties");
-        if (!cancelled && serverProperties?.length) setProperties(serverProperties);
+        if (!cancelled && serverProperties?.length) setProperties(serverProperties.map(normalizeStoredProperty));
       } catch (error) {
         console.error("Could not load admin properties from the backend.", error);
       }
@@ -2386,7 +2440,7 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
     : applications.filter((application) => application.renterEmail === user.email);
   const ownPropertyIds = new Set(ownProperties.map((property) => property.id));
   const applicants = applications
-    .filter((application) => user.role !== "landlord" || ownPropertyIds.has(application.propertyId))
+    .filter((application) => user.role !== "landlord" || (ownPropertyIds.has(application.propertyId) && (application.status || "Pending").toLowerCase() === "pending"))
     .map((application) => ({
       ...application,
       property: application.property || properties.find((property) => property.id === application.propertyId)?.name || "Rental listing",
@@ -2682,7 +2736,7 @@ export default function App() {
             body: JSON.stringify(properties),
           });
         }
-        if (!cancelled) setProperties(serverProperties);
+        if (!cancelled) setProperties(serverProperties.map(normalizeStoredProperty));
       } catch (error) {
         console.error("Could not load rental listings from the backend.", error);
       } finally {

@@ -477,6 +477,8 @@ a { color: inherit; }
 .chat-message { max-width: min(76%, 420px); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .chat-message p { margin: 0; padding: 10px 12px; border-radius: 3px 11px 11px 11px; color: #41526a; background: white; box-shadow: 0 2px 5px #142b4409; font-size: 9px; line-height: 1.6; }
 .chat-message small { padding: 0 3px; color: #95a1b0; font-size: 7px; }
+.unsend-message { display: inline-flex; align-items: center; gap: 4px; padding: 2px 3px; border: 0; color: #8391a5; background: transparent; font: inherit; font-size: 9px; cursor: pointer; }
+.unsend-message:hover, .unsend-message:focus-visible { color: #b42318; }
 .chat-message.mine { align-self: flex-end; align-items: flex-end; }
 .chat-message.mine p { border-radius: 11px 3px 11px 11px; color: white; background: var(--blue); }
 .chat-message.mine small { color: #8d9aad; }
