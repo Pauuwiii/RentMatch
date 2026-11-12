@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "build:pages": "vite build --outDir dist --emptyOutDir"
+    "build:pages": "vite build --outDir dist --emptyOutDir && node scripts/prepare-pages.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",

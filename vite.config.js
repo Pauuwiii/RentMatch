@@ -10,6 +10,10 @@ export default defineConfig({
     emptyOutDir: false,
     cssCodeSplit: false,
     rollupOptions: {
+      input: {
+        template: resolve(process.cwd(), "index.template.html"),
+        app: resolve(process.cwd(), "src/main.jsx"),
+      },
       output: {
         entryFileNames: "js/rentmatch.js",
         chunkFileNames: "js/[name].js",

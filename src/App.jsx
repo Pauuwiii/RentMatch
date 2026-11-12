@@ -150,7 +150,7 @@ function getMatchScore(property, preferences) {
 }
 
 function Brand({ onClick, inverse = false }) {
-  return <button className={`brand ${inverse ? "brand-inverse" : ""}`} type="button" onClick={onClick} aria-label="RentMatch home"><img className="brand-logo" src={`${import.meta.env.BASE_URL}Images/rentmatch-logo.png`} alt="RentMatch" /></button>;
+  return <button className={`brand ${inverse ? "brand-inverse" : ""}`} type="button" onClick={onClick} aria-label="RentMatch home"><img className="brand-logo" src={`${import.meta.env.BASE_URL}wwwroot/Images/rentmatch-logo.png`} alt="RentMatch" /></button>;
 }
 
 function Button({ children, variant = "primary", size = "normal", className = "", ...props }) {
