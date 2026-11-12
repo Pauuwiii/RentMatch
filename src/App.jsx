@@ -9,6 +9,7 @@ import {
   RotateCcw
 } from "lucide-react";
 import { amenityOptions, defaultPreferences, initialProperties, locations, propertyTypes } from "./data.js";
+import rentmatchLogo from "../wwwroot/Images/rentmatch-logo.png";
 
 const currency = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 });
 const fallbackImage = "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=85";
@@ -194,7 +195,7 @@ function getMatchScore(property, preferences) {
 }
 
 function Brand({ onClick, inverse = false }) {
-  return <button className={`brand ${inverse ? "brand-inverse" : ""}`} type="button" onClick={onClick} aria-label="RentMatch home"><img className="brand-logo" src={`${import.meta.env.BASE_URL}wwwroot/Images/rentmatch-logo.png`} alt="RentMatch" /></button>;
+  return <button className={`brand ${inverse ? "brand-inverse" : ""}`} type="button" onClick={onClick} aria-label="RentMatch home"><img className="brand-logo" src={rentmatchLogo} alt="RentMatch — Finding Your Perfect Home" /></button>;
 }
 
 function Button({ children, variant = "primary", size = "normal", className = "", ...props }) {
