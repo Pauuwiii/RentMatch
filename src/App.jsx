@@ -113,10 +113,19 @@ function useStoredState(key, initialValue) {
       if (key === "rentmatch-properties" && Array.isArray(parsed)) {
         const initialIds = new Set(initialValue.map((property) => property.id));
         const storedById = new Map(parsed.map((property) => [property.id, property]));
-        const mergedInitial = initialValue.map((property) => ({
-          ...property,
-          ...storedById.get(property.id),
-        }));
+        const mergedInitial = initialValue.map((property) => {
+          const stored = storedById.get(property.id);
+          if (!stored) return property;
+          const merged = { ...property, ...stored };
+          if (property.id === "anyayahan-apartment") {
+            merged.latitude = 13.758735861415932;
+            merged.longitude = 121.0705346512765;
+            merged.isDraft = false;
+            merged.available = true;
+            merged.moderationStatus = "Approved";
+          }
+          return merged;
+        });
         const userAdded = parsed.filter((property) => !initialIds.has(property.id));
         return [...userAdded, ...mergedInitial];
       }
