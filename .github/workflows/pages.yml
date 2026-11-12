@@ -41,7 +41,7 @@ jobs:
           GITHUB_ACTIONS: "true"
 
       - name: Copy listing photos
-        run: cp -R wwwroot/Images dist/wwwroot/Images
+        run: mkdir -p dist/wwwroot && cp -R wwwroot/Images dist/wwwroot/Images
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
