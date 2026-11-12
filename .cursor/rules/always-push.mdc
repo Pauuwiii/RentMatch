@@ -1,0 +1,14 @@
+---
+description: Always commit completed work and push it to the remote
+alwaysApply: true
+---
+
+# Always push to git
+
+When finishing a task that changed files in this repo:
+
+1. Create a git commit for the relevant changes (unless the user said not to commit).
+2. Push the commit to the remote immediately after a successful commit (`git push`).
+3. Do not wait for a separate push request.
+
+If push fails (auth, network, protected branch), report the error and the commit that is ready to push.
