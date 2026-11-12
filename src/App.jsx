@@ -1695,7 +1695,9 @@ function PropertyEditor({ property, onClose, onSave, onToast }) {
         distance: values.get("distance")?.toString().trim() || "",
         available: publish && availableSlots > 0,
         isDraft: !publish,
-        moderationStatus: property?.moderationStatus || (publish ? "Needs review" : "Draft"),
+        moderationStatus: publish
+          ? (property?.moderationStatus === "Approved" ? "Approved" : "Needs review")
+          : "Draft",
         createdAt: property?.createdAt || new Date().toISOString(),
       });
     } catch (saveError) {
@@ -2617,17 +2619,23 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       moderationStatus: newProperty.moderationStatus || "Needs review",
       createdAt: newProperty.createdAt || new Date().toISOString(),
     };
-    const listing = await apiRequest(`/api/properties/${encodeURIComponent(newProperty.id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(propertyToSave),
-    });
+    // GitHub Pages has no API server. Keep demo listings editable by saving
+    // them to the same browser-backed state used by the preview.
+    const listing = staticPreview
+      ? normalizeStoredProperty(propertyToSave)
+      : await apiRequest(`/api/properties/${encodeURIComponent(newProperty.id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(propertyToSave),
+        });
     setProperties((current) => {
       const exists = current.some((item) => item.id === listing.id);
       return exists
         ? current.map((item) => item.id === listing.id ? listing : item)
         : [listing, ...current];
     });
+
+    if (staticPreview) return;
 
     try {
       await apiRequest("/api/accounts", {
