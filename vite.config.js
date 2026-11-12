@@ -15,9 +15,9 @@ export default defineConfig({
         app: resolve(process.cwd(), "src/main.jsx"),
       },
       output: {
-        entryFileNames: "js/rentmatch.js",
-        chunkFileNames: "js/[name].js",
-        assetFileNames: (asset) => asset.name?.endsWith(".css") ? "css/rentmatch.css" : "assets/[name][extname]"
+        entryFileNames: "js/[name]-[hash].js",
+        chunkFileNames: "js/[name]-[hash].js",
+        assetFileNames: (asset) => asset.name?.endsWith(".css") ? "css/[name]-[hash][extname]" : "assets/[name]-[hash][extname]"
       }
     }
   }
