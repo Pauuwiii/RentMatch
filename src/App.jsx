@@ -850,8 +850,8 @@ function MessagesPage({ messages, setMessages, user, properties, onToast }) {
   const people = [...new Set(["Maya Santos", ...messages.map((message) => message.person)])];
   const currentMessages = messages.filter((message) => message.person === activePerson);
   const conversationProperty = properties.find((property) => property.id === currentMessages.findLast((message) => message.propertyId)?.propertyId) || properties[0];
-  const send = (event) => { event.preventDefault(); if (!draft.trim()) return; setMessages((current) => [...current, { id: Date.now(), person: activePerson, from: user.name, text: draft.trim(), time: "Just now", propertyId: conversationProperty?.id }]); setDraft(""); };
-  return <div className="workspace-content messages-content"><SectionHeading eyebrow="KEEP THE CONVERSATION GOING" title="Messages" detail="Talk through details, ask a question, or plan a viewing." /><div className="chat-layout"><aside className="conversation-list"><div className="conversation-search"><Search size={15} /><input aria-label="Search conversations" placeholder="Search messages" /></div>{people.map((person) => <button key={person} className={`conversation-item ${person === activePerson ? "active" : ""}`} onClick={() => setActivePerson(person)}><span className="conversation-avatar">{person.charAt(0)}</span><span><strong>{person}</strong><small>{messages.findLast((message) => message.person === person)?.text || "Start a conversation"}</small></span><span className="conversation-time">Now</span></button>)}</aside><section className="chat-panel"><header className="chat-header"><span className="conversation-avatar">{activePerson.charAt(0)}</span><span><strong>{activePerson}</strong><small><i /> Usually replies within a day</small></span><button className="icon-button" aria-label="Contact details" onClick={() => onToast("Contact details are shared after a host responds to your inquiry.")}><MoreHorizontal size={20} /></button></header><div className="chat-property-context"><img src={conversationProperty?.image || fallbackImage} alt="" /><span><small>ABOUT THE LISTING</small><strong>{conversationProperty?.name || "Rental inquiry"}</strong></span><span className="chat-context-price">{currency.format(conversationProperty?.price || 0)}<small> / month</small></span></div><div className="chat-messages" aria-live="polite">{currentMessages.length ? currentMessages.map((message) => <div key={message.id} className={`chat-message ${message.from === user.name ? "mine" : "theirs"}`}><p>{message.text}</p><small>{message.time}</small></div>) : <div className="chat-start"><MessageCircle size={22} /><p>Say hello to {activePerson} about a rental.</p></div>}</div><form className="chat-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." aria-label="Write a message" /><Button type="submit" aria-label="Send message"><Send size={16} /></Button></form><p className="chat-disclaimer">Messages are saved in this browser for this demo.</p></section></div></div>;
+  const send = (event) => { event.preventDefault(); if (!draft.trim()) return; setMessages((current) => [...current, { id: Date.now(), person: activePerson, from: user.name, sender: "me", text: draft.trim(), time: "Just now", propertyId: conversationProperty?.id }]); setDraft(""); };
+  return <div className="workspace-content messages-content"><SectionHeading eyebrow="KEEP THE CONVERSATION GOING" title="Messages" detail="Talk through details, ask a question, or plan a viewing." /><div className="chat-layout"><aside className="conversation-list"><div className="conversation-search"><Search size={15} /><input aria-label="Search conversations" placeholder="Search messages" /></div>{people.map((person) => <button key={person} className={`conversation-item ${person === activePerson ? "active" : ""}`} onClick={() => setActivePerson(person)}><span className="conversation-avatar">{person.charAt(0)}</span><span><strong>{person}</strong><small>{messages.findLast((message) => message.person === person)?.text || "Start a conversation"}</small></span><span className="conversation-time">Now</span></button>)}</aside><section className="chat-panel"><header className="chat-header"><span className="conversation-avatar">{activePerson.charAt(0)}</span><span><strong>{activePerson}</strong><small><i /> Usually replies within a day</small></span><button className="icon-button" aria-label="Contact details" onClick={() => onToast("Contact details are shared after a host responds to your inquiry.")}><MoreHorizontal size={20} /></button></header><div className="chat-property-context"><img src={conversationProperty?.image || fallbackImage} alt="" /><span><small>ABOUT THE LISTING</small><strong>{conversationProperty?.name || "Rental inquiry"}</strong></span><span className="chat-context-price">{currency.format(conversationProperty?.price || 0)}<small> / month</small></span></div><div className="chat-messages" aria-live="polite">{currentMessages.length ? currentMessages.map((message) => <div key={message.id} className={`chat-message ${(message.sender === "me" || (!message.sender && message.from === user.name)) ? "mine" : "theirs"}`}><p>{message.text}</p><small>{message.time}</small></div>) : <div className="chat-start"><MessageCircle size={22} /><p>Say hello to {activePerson} about a rental.</p></div>}</div><form className="chat-compose" onSubmit={send}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." aria-label="Write a message" /><Button type="submit" aria-label="Send message"><Send size={16} /></Button></form><p className="chat-disclaimer">Messages are saved in this browser for this demo.</p></section></div></div>;
 }
 
 function HostViewingRequests({ viewings, properties, onRespond }) {
@@ -2256,8 +2256,8 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       const requestMessage = `Viewing request for ${property.name}\nDate: ${date}\nPreferred time: ${requestedTime}\n${renterMessage}`;
       setMessages((current) => [
         ...current,
-        { id: `${request.id}-renter`, person: request.hostName, from: user.name, text: requestMessage, time: messageTime, propertyId: property.id },
-        { id: `${request.id}-host`, person: user.name, from: user.name, text: requestMessage, time: messageTime, propertyId: property.id },
+        { id: `${request.id}-renter`, person: request.hostName, from: user.name, sender: "me", text: requestMessage, time: messageTime, propertyId: property.id },
+        { id: `${request.id}-host`, person: user.name, from: user.name, sender: "them", text: requestMessage, time: messageTime, propertyId: property.id },
       ]);
       setScheduleProperty(null);
       notify("Viewing request sent. The host can review it in Viewings.");
@@ -2272,7 +2272,7 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
     }
     setScheduleProperty(property);
   };
-  const startMessage = (property) => { setSelectedProperty(null); setView("messages"); if (!messages.some((item) => item.person === property.host)) setMessages([...messages, { id: Date.now(), person: property.host || "Property host", from: property.host || "Property host", text: `Hello, thanks for your interest in ${property.name}. What would you like to know?`, time: "Just now" }]); };
+  const startMessage = (property) => { setSelectedProperty(null); setView("messages"); if (!messages.some((item) => item.person === property.host)) setMessages([...messages, { id: Date.now(), person: property.host || "Property host", from: property.host || "Property host", sender: "them", text: `Hello, thanks for your interest in ${property.name}. What would you like to know?`, time: "Just now" }]); };
   const signOut = () => { setUser(null); setView("landing"); };
   const goToAdmin = () => { if (user.role === "admin") setView("admin"); };
   const goToPreferences = () => setView(user.role === "landlord" ? "profile" : "preferences");
@@ -2336,8 +2336,8 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       const reply = `Viewing request for ${property.name}: ${status === "Available" ? "Available" : "Not available"}.\n${comment}`;
       setMessages((current) => [
         ...current,
-        { id: `${request.id}-host-reply-${updatedAt.getTime()}-renter`, person: request.renterName, from: user.name, text: reply, time: messageTime, propertyId: property.id },
-        { id: `${request.id}-host-reply-${updatedAt.getTime()}-host`, person: request.hostName || property.host || user.name, from: user.name, text: reply, time: messageTime, propertyId: property.id },
+        { id: `${request.id}-host-reply-${updatedAt.getTime()}-renter`, person: request.renterName, from: user.name, sender: "them", text: reply, time: messageTime, propertyId: property.id },
+        { id: `${request.id}-host-reply-${updatedAt.getTime()}-host`, person: request.hostName || property.host || user.name, from: user.name, sender: "me", text: reply, time: messageTime, propertyId: property.id },
       ]);
       notify(`Your ${status.toLowerCase()} response was sent to ${request.renterName || "the renter"} in Messages.`);
     } catch (error) {
@@ -2364,7 +2364,7 @@ function Workspace({ user, setUser, view, setView, properties, setProperties, fa
       notify(`Could not update application: ${error.message}`);
     }
   };
-  const applicantMessage = (name) => { setView("messages"); if (!messages.some((message) => message.person === name)) setMessages([...messages, { id: Date.now(), person: name, from: name, text: "Hi, thanks for reaching out. How can I help with your rental search?", time: "Just now" }]); };
+  const applicantMessage = (name) => { setView("messages"); if (!messages.some((message) => message.person === name)) setMessages([...messages, { id: Date.now(), person: name, from: name, sender: "them", text: "Hi, thanks for reaching out. How can I help with your rental search?", time: "Just now" }]); };
   const createMaintenanceRequest = async (request) => {
     try {
       const savedRequest = await apiRequest("/api/maintenance-requests", {
@@ -2515,7 +2515,7 @@ export default function App() {
   const [applications, setApplications] = useState([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState([]);
   const [viewings, setViewings] = useStoredState("rentmatch-viewings", []);
-  const [messages, setMessages] = useStoredState("rentmatch-messages", [{ id: "welcome-message", person: "Maya Santos", property: "The Poblacion Loft", from: "Maya Santos", text: "Hi Gabriela! Thanks for saving The Poblacion Loft. Let me know if you would like to schedule a viewing.", time: "9:42 AM" }]);
+  const [messages, setMessages] = useStoredState("rentmatch-messages", [{ id: "welcome-message", person: "Maya Santos", property: "The Poblacion Loft", from: "Maya Santos", sender: "them", text: "Hi Gabriela! Thanks for saving The Poblacion Loft. Let me know if you would like to schedule a viewing.", time: "9:42 AM" }]);
   const [view, setView] = useState(user ? "dashboard" : "landing");
   const [role, setRole] = useState("renter");
   const [authMode, setAuthMode] = useState("login");
